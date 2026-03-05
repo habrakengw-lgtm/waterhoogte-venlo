@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#2a2d2f" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Venlo H" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <title>Waterhoogte Venlo</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Maven+Pro:wght@400..900&display=swap');
+    :root {
+      /* Brand colours */
+      --green:       #43B02A;
+      --green-light: #5fd943;
+      --green-dim:   rgba(67,176,42,0.15);
+      --green-border:rgba(67,176,42,0.30);
+      --charcoal:    #53565A;
+      /* Backgrounds — derived from charcoal, stepping darker */
+      --bg:          #1e2022;
+      --bg2:         #26292b;
+      --bg3:         #2e3133;
+      /* Surfaces & borders */
+      --surface:     rgba(255,255,255,0.04);
+      --border:      rgba(255,255,255,0.08);
+      --border-strong:rgba(255,255,255,0.14);
+      /* Text */
+      --text:        #e8e9ea;
+      --text-dim:    #9a9d9f;
+      --text-muted:  #66696c;
+      /* Regime colours — adjusted to complement green/charcoal */
+      --low:         #43B02A;
+      --mid:         #f0a500;
+      --high:        #e8622a;
+      --extreme:     #d93025;
+      --forecast:    #7eb8f7;
+      /* Safe areas */
+      --safe-top:    env(safe-area-inset-top,0px);
+      --safe-bot:    env(safe-area-inset-bottom,0px);
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Maven Pro',sans-serif;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+    body{display:flex;flex-direction:column;min-height:100dvh}
+
+    /* ── Header ── */
+    .header{background:var(--bg2);border-bottom:1px solid var(--border-strong);padding:calc(14px + var(--safe-top)) 20px 16px;position:sticky;top:0;z-index:100}
+    .header-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+    .lbl{font-family:'Maven Pro',sans-serif;font-size:9px;letter-spacing:3px;color:var(--green);text-transform:uppercase;margin-bottom:5px}
+    .title{font-family:'Maven Pro',sans-serif;font-size:22px;font-weight:700;color:var(--text);letter-spacing:-.3px;line-height:1}
+    .sub{font-size:10px;color:var(--text-muted);margin-top:4px}
+    /* Green left-border accent on header title */
+    .title-block{border-left:3px solid var(--green);padding-left:10px}
+
+    .cur{text-align:right;flex-shrink:0}
+    .cur-lbl{font-family:'Maven Pro',sans-serif;font-size:8px;letter-spacing:2px;color:var(--text-muted);text-transform:uppercase;margin-bottom:2px}
+    .cur-val{font-family:'Maven Pro',sans-serif;font-size:28px;font-weight:600;color:var(--green-light);line-height:1}
+    .cur-unit{font-size:11px;color:var(--green);font-weight:500}
+
+    /* ── Refresh row ── */
+    .refresh-row{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+    .btn{display:flex;align-items:center;gap:7px;background:var(--green-dim);border:1px solid var(--green-border);border-radius:6px;color:var(--green-light);font-family:'Maven Pro',sans-serif;font-size:11px;font-weight:600;padding:9px 16px;cursor:pointer;letter-spacing:.5px;transition:background .15s,transform .1s;-webkit-tap-highlight-color:transparent;user-select:none}
+    .btn:active{transform:scale(.97);background:rgba(67,176,42,.25)}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .spin{display:inline-block}
+    .spinning{animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .rtime{font-family:'Maven Pro',sans-serif;font-size:9px;color:var(--text-muted)}
+
+    /* ── Status bar ── */
+    .sbar{margin:10px 20px 0;padding:9px 14px;border-radius:6px;font-size:11px;line-height:1.5;display:none}
+    .sbar.err {background:rgba(217,48,37,.1);border:1px solid rgba(217,48,37,.3);color:#f28b82}
+    .sbar.warn{background:rgba(240,165,0,.08);border:1px solid rgba(240,165,0,.25);color:#fdd663}
+    .sbar.info{background:var(--green-dim);border:1px solid var(--green-border);color:var(--green-light)}
+
+    /* ── Content ── */
+    .content{flex:1;padding:20px 16px calc(20px + var(--safe-bot));display:flex;flex-direction:column;gap:18px}
+    .empty{text-align:center;padding:80px 20px;color:var(--text-muted);display:flex;flex-direction:column;align-items:center;gap:16px}
+    .empty-icon{opacity:.35;width:66px;height:44px}
+    .empty-txt{font-size:13px;line-height:1.6;max-width:260px}
+
+    /* ── Section labels ── */
+    .slbl{font-family:'Maven Pro',sans-serif;font-size:12px;font-weight:600;letter-spacing:1px;color:var(--text-dim);text-transform:uppercase;margin-bottom:10px}
+
+    /* ── Legend ── */
+    .legend{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:10px}
+    .legend-item{display:flex;align-items:center;gap:5px;color:var(--text-muted)}
+    .ldot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+    .ldash{width:16px;border-top:2px dashed var(--forecast);flex-shrink:0}
+
+    /* ── Chart card ── */
+    .ccard{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 8px 10px}
+    .cwrap{position:relative;height:300px}
+
+    /* ── Stats strip ── */
+    .sstrip{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .sc{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 10px;text-align:center}
+    .sc-lbl{font-family:'Maven Pro',sans-serif;font-size:11px;font-weight:500;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px}
+    .sc-val{font-family:'Maven Pro',sans-serif;font-size:18px;font-weight:600;color:var(--green-light)}
+    .sc-u{font-size:9px;color:var(--green)}
+
+    /* ── Table ── */
+    .tcard{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+    .tscroll{overflow-x:auto;max-height:320px;overflow-y:auto}
+    table{width:100%;border-collapse:collapse;font-size:11px;min-width:420px}
+    thead th{position:sticky;top:0;background:var(--bg2);padding:9px 12px;text-align:left;color:var(--text-muted);font-weight:600;letter-spacing:.5px;font-size:9px;text-transform:uppercase;border-bottom:1px solid var(--border-strong);white-space:nowrap;font-family:'Maven Pro',sans-serif}
+    tbody tr{border-bottom:1px solid rgba(255,255,255,.04)}
+    tbody tr.fr{border-left:2px solid rgba(126,184,247,.35)}
+    tbody tr:active{background:rgba(67,176,42,.06)}
+    tbody td{padding:8px 12px;white-space:nowrap;color:var(--text-dim)}
+    td.tdh{color:var(--green-light);font-weight:600;font-size:12px;font-family:'Maven Pro',sans-serif}
+    td.tdd{color:var(--text-muted);font-size:10px;font-family:'Maven Pro',sans-serif}
+    .rbadge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:9px;font-weight:600;letter-spacing:.5px;font-family:'Maven Pro',sans-serif}
+    .tf{font-size:9px;color:var(--forecast);font-family:'Maven Pro',sans-serif}
+    .tm{font-size:9px;color:var(--text-muted);font-family:'Maven Pro',sans-serif}
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar{width:4px;height:4px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:rgba(67,176,42,.3);border-radius:2px}
+
+    /* ── Animation ── */
+    .fade-in{animation:fi .35s ease both}
+    @keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+    /* ── Install banner ── */
+    .ibanner{position:fixed;bottom:calc(16px + var(--safe-bot));left:16px;right:16px;background:var(--bg2);border:1px solid var(--green-border);border-radius:10px;padding:14px 16px;display:none;align-items:center;gap:12px;z-index:200;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+    .itxt{flex:1;font-size:11px;color:var(--text-dim);line-height:1.4}
+    .itxt strong{color:var(--text)}
+    .ibtn{background:var(--green-dim);border:1px solid var(--green-border);border-radius:6px;color:var(--green-light);font-family:'Maven Pro',sans-serif;font-size:11px;font-weight:600;padding:8px 14px;cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+    .idism{background:none;border:none;color:var(--text-muted);font-size:18px;cursor:pointer;padding:4px;-webkit-tap-highlight-color:transparent}
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <div class="title-block">
+      <div class="lbl">RWS · Sint Pieter → Venlo</div>
+      <div class="title">Verwachte<br>waterhoogte Venlo</div>
+      <div class="sub">Berekende waterhoogte Venlo op basis van waterafvoer bij Sint Pieter</div>
+    </div>
+    <div class="cur" id="curBlock" style="display:none">
+      <div class="cur-lbl">Laatst gemeten waterstand</div>
+      <div class="cur-val" id="curVal">—</div>
+      <div class="cur-unit">cm NAP</div>
+      <div id="curDatetime" style="font-size:9px;color:var(--text-muted);margin-top:3px"></div>
+    </div>
+  </div>
+  <div class="refresh-row">
+    <button class="btn" id="btnRefresh" onclick="refreshData()">
+      <span class="spin" id="spinIcon">⟳</span>
+      <span id="btnLbl">Ververs data (RWS)</span>
+    </button>
+    <span class="rtime" id="rtime"></span>
+  </div>
+</div>
+
+<div class="sbar" id="sbar"></div>
+
+<div class="content">
+  <div class="empty" id="emptyState">
+    <img class="empty-icon" src="https://i.ibb.co/TxTq52HK/Beeldmerk-GWL-HEX.png" alt="Logo" />
+    <div class="empty-txt">Klik op <strong style="color:var(--green)">"Ververs data"</strong> om de meest recente afvoerdata op te halen.</div>
+  </div>
+  <div id="main" style="display:none;flex-direction:column;gap:20px;"></div>
+</div>
+
+<div class="ibanner" id="ibanner">
+  <div class="itxt"><strong>Installeer als app</strong><br>Voeg toe aan beginscherm voor snelle toegang.</div>
+  <button class="ibtn" onclick="installPWA()">Installeer</button>
+  <button class="idism" onclick="dismissInstall()">✕</button>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+// PARAMETERS  (Excel "Parameters" sheet)
+// ═══════════════════════════════════════
+const P={
+  Q_P70:335.652,Q_P90:661.022,Q_EXT:1350,s_EXT:0.365329,H_at_QEXT:1468.871528,
+  LOW: {a0:1124.125163,a1:10.166296, a2: 2.526432, q_mean:129.850031,q_std:85.739993},
+  MID: {a0:1210.118821,a1:30.70892,  a2: 2.240687, q_mean:473.631258,q_std:88.385528},
+  HIGH:{a0:1391.697171,a1:91.653817, a2:-26.999303,q_mean:952.246329,q_std:257.094962},
+};
+const RC={LOW:'#43B02A',MID:'#f0a500',HIGH:'#e8622a',EXTREME:'#d93025'};
+
+function regime(Q){return Q<P.Q_P70?'LOW':Q<P.Q_P90?'MID':Q<P.Q_EXT?'HIGH':'EXTREME'}
+function calcH(Q){
+  const r=regime(Q);
+  if(r==='EXTREME') return P.H_at_QEXT+P.s_EXT*(Q-P.Q_EXT);
+  const p=P[r],z=(Q-p.q_mean)/p.q_std;
+  return p.a0+p.a1*z+p.a2*z*z;
+}
+
+// ═══════════════════════════════════════
+// DATA FETCH
+// Calls Cloudflare Worker at workers.dev
+// which fetches the CSV from waterinfo.rws.nl on the server side.
+// This avoids all CORS issues completely.
+// ═══════════════════════════════════════
+async function fetchData(){
+  const res = await fetch('https://rws-data.habraken-gw.workers.dev');
+  let body;
+  try { body = await res.json(); } catch(e) { throw new Error('Onleesbare response van server'); }
+  if(!res.ok) throw new Error(`Fout bij ophalen data (HTTP ${res.status}${body?.error?' — '+body.error:''})`);
+  if(!Array.isArray(body)||!body.length) throw new Error('Lege dataset ontvangen');
+  // Server returns pre-computed rows: { datetime (ISO), Q, H_cmNAP, regime }
+  // datetime = col F (Datum/tijd waterhoogte Venlo), H_cmNAP = col D
+  return body.map(r => ({
+    datetime:   new Date(r.datetime),
+    Q:          r.Q,
+    H_cmNAP:    r.H_cmNAP,
+    regime:     r.regime,
+    isForecast: new Date(r.datetime).getTime() > Date.now(),
+  }));
+}
+
+async function fetchHistory(){
+  try{
+    const res=await fetch('https://rws-history.habraken-gw.workers.dev?t='+Date.now());
+    if(!res.ok) return [];
+    const body=await res.json();
+    if(!Array.isArray(body)) return [];
+    return body.map(r=>({datetime:new Date(r.datetime),H_cmNAP:r.H_cmNAP}));
+  }catch(e){return [];}
+}
+
+async function fetchCurrent(){
+  try {
+    const res = await fetch('https://rws-current.habraken-gw.workers.dev?t=' + Date.now());
+    if(!res.ok) return null;
+    const body = await res.json();
+    if(body.error) return null;
+    return body;
+  } catch(e) { return null; }
+}
+
+
+let chart=null, rows=[], historyRows=[];
+const fmt=d=>d.toLocaleString('nl-NL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+
+function status(msg,type='err'){
+  const el=document.getElementById('sbar');
+  if(!msg){el.style.display='none';return;}
+  el.textContent=msg; el.className='sbar '+type; el.style.display='block';
+}
+
+async function refreshData(){
+  const btn=document.getElementById('btnRefresh');
+  const ico=document.getElementById('spinIcon');
+  const lbl=document.getElementById('btnLbl');
+  btn.disabled=true; ico.classList.add('spinning'); lbl.textContent='Laden…'; status(null);
+  try{
+    // Fetch forecast, history and current level all in parallel
+    const [raw, history, current] = await Promise.all([
+      fetchData(),
+      fetchHistory(),
+      fetchCurrent(),
+    ]);
+    rows = raw;
+    historyRows = history;
+
+    // Update current water level display (measured, from separate endpoint)
+    if (current) {
+      document.getElementById('curVal').textContent = current.H_cmNAP.toFixed(1);
+      document.getElementById('curDatetime').textContent = current.datetime;
+      document.getElementById('curBlock').style.display = 'block';
+    }
+
+    status(`✓ ${rows.length} meetpunten geladen via waterinfo.rws.nl`,'info');
+    render();
+    document.getElementById('rtime').textContent = 'Bijgewerkt: ' + fmt(new Date());
+  }catch(e){
+    status('⚠ '+e.message,'err');
+  }finally{
+    btn.disabled=false; ico.classList.remove('spinning'); lbl.textContent='Ververs data (RWS)';
+  }
+}
+
+// ═══════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════
+function render(){
+  if(!rows.length) return;
+  document.getElementById('emptyState').style.display='none';
+  const main=document.getElementById('main');
+  main.style.display='flex'; main.innerHTML='';
+  const now=Date.now();
+
+  // Stats
+  const hs=rows.map(r=>r.H_cmNAP), mn=Math.min(...hs), mx=Math.max(...hs);
+  const peak=rows.find(r=>r.H_cmNAP===mx);
+  const se=document.createElement('div'); se.className='fade-in';
+  se.innerHTML=`<div class="slbl">Statistieken · ${rows.length} meetpunten</div>
+  <div class="sstrip">
+    <div class="sc"><div class="sc-lbl">Min hoogte</div><div class="sc-val">${mn.toFixed(0)}<span class="sc-u"> cm</span></div></div>
+    <div class="sc"><div class="sc-lbl">Max hoogte</div><div class="sc-val">${mx.toFixed(0)}<span class="sc-u"> cm</span></div></div>
+    <div class="sc"><div class="sc-lbl">Piek op</div><div class="sc-val" style="font-size:11px;color:var(--green-light)">${peak?fmt(peak.datetime):'—'}</div></div>
+  </div>`;
+  main.appendChild(se);
+
+  // Chart
+  // ── Unified time axis: all model rows + all measured history rows ─────────
+  // Model line: single dataset, full range, colour changes at "now" via segment
+  // Measured:   separate dataset, amber solid, history only
+
+  const nowMs = Date.now();
+
+  // Unified label set (all unique ms timestamps, sorted)
+  const allTimesMs = [...new Set([
+    ...rows.map(r=>r.datetime.getTime()),
+    ...historyRows.map(r=>r.datetime.getTime()),
+  ])].sort((a,b)=>a-b);
+  const labels = allTimesMs.map(ms=>fmt(new Date(ms)));
+
+  // Model: all forecast rows mapped onto unified axis
+  const modelByMs = new Map(rows.map(r=>[r.datetime.getTime(), r]));
+  const modelData = allTimesMs.map(ms=>{ const r=modelByMs.get(ms); return r?r.H_cmNAP:null; });
+
+  // Measured Venlo: history rows mapped onto unified axis
+  const measByMs  = new Map(historyRows.map(r=>[r.datetime.getTime(), r]));
+  const measData  = allTimesMs.map(ms=>{ const r=measByMs.get(ms); return r?r.H_cmNAP:null; });
+
+  // Index of "now" in the unified axis (for vertical line + segment colouring)
+  const nowIndex = allTimesMs.reduce((best,ms,i)=>
+    Math.abs(ms-nowMs)<Math.abs(allTimesMs[best]-nowMs)?i:best, 0);
+
+  if(chart){chart.destroy();chart=null;}
+
+  // Vertical "now" line plugin
+  const nowLinePlugin={
+    id:'nowLine',
+    afterDraw(chart){
+      const {ctx,chartArea:{top,bottom},scales:{x}}=chart;
+      const xPos=x.getPixelForIndex(nowIndex);
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(xPos,top);
+      ctx.lineTo(xPos,bottom);
+      ctx.strokeStyle='rgba(255,255,255,0.35)';
+      ctx.lineWidth=1.5;
+      ctx.setLineDash([6,4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle='rgba(255,255,255,0.55)';
+      ctx.font='bold 10px Maven Pro, sans-serif';
+      ctx.textAlign='center';
+      ctx.fillText('nu',xPos,top+12);
+      ctx.restore();
+    }
+  };
+
+  const ce=document.createElement('div'); ce.className='fade-in'; ce.style.animationDelay='.05s';
+  ce.innerHTML=`<div class="slbl">Verwachte waterhoogte in Venlo</div>
+  <div class="legend">
+    <div class="legend-item"><span class="ldot" style="background:#43B02A"></span>Berekend (verleden)</div>
+    <div class="legend-item"><span style="display:inline-block;width:16px;border-top:2px dashed rgba(126,184,247,0.9);margin-right:2px;vertical-align:middle"></span>Voorspelling</div>
+    <div class="legend-item"><span style="display:inline-block;width:16px;border-top:2px solid #f0a500;margin-right:2px;vertical-align:middle"></span>Gemeten Venlo</div>
+    <div class="legend-item"><span style="display:inline-block;width:16px;border-top:1.5px dashed rgba(255,255,255,0.4);margin-right:2px;vertical-align:middle"></span>Nu</div>
+  </div>
+  <div class="ccard" style="margin-top:10px"><div class="cwrap"><canvas id="wc"></canvas></div></div>`;
+  main.appendChild(ce);  // ← canvas is now in the DOM
+
+  const chartCtx = document.getElementById('wc').getContext('2d');
+  const g = chartCtx.createLinearGradient(0, 0, 0, 300);
+  g.addColorStop(0, 'rgba(67,176,42,0.12)'); g.addColorStop(1, 'rgba(67,176,42,0)');
+
+  chart=new Chart(chartCtx,{
+    type:'line',
+    plugins:[nowLinePlugin],
+    data:{
+      labels,
+      datasets:[
+        // Dataset 1: model line — green (past) fading to blue dashed (future)
+        // segment callback changes colour/dash at nowIndex
+        {
+          label:'Model',
+          data:modelData,
+          borderColor:'#43B02A',
+          borderWidth:2,
+          pointRadius:0,
+          pointHoverRadius:4,
+          tension:0.3,
+          fill:true,
+          backgroundColor:g,
+          spanGaps:false,
+          segment:{
+            borderColor: ctx2 => allTimesMs[ctx2.p1DataIndex] > nowMs ? 'rgba(126,184,247,0.9)' : '#43B02A',
+            borderDash:  ctx2 => allTimesMs[ctx2.p1DataIndex] > nowMs ? [5,3] : [],
+          },
+        },
+        // Dataset 2: actually measured water level at Venlo (amber solid)
+        {
+          label:'Gemeten Venlo',
+          data:measData,
+          borderColor:'#f0a500',
+          borderWidth:2,
+          pointRadius:0,
+          pointHoverRadius:4,
+          tension:0.3,
+          fill:false,
+          spanGaps:false,
+        },
+      ],
+    },
+    options:{
+      animation:{duration:400}, responsive:true, maintainAspectRatio:false,
+      interaction:{intersect:false,mode:'index'},
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor:'rgba(38,41,43,0.97)',borderColor:'rgba(67,176,42,0.35)',borderWidth:1,
+          titleColor:'#66696c',
+          titleFont:{family:'Maven Pro',size:12},
+          bodyFont:{family:'Maven Pro',size:13,weight:'600'},
+          padding:10,
+          callbacks:{
+            label(ctx2){
+              if(ctx2.parsed.y===null||ctx2.parsed.y===undefined) return null;
+              const ms=allTimesMs[ctx2.dataIndex];
+              if(ctx2.datasetIndex===0){
+                const r=modelByMs.get(ms);
+                if(!r) return null;
+                const past=ms<=nowMs;
+                return `${past?'Model':'Voorspelling'}: ${ctx2.parsed.y.toFixed(1)} cm  |  Q: ${r.Q.toFixed(1)} m³/s  [${r.regime}]`;
+              }
+              return `Gemeten: ${ctx2.parsed.y.toFixed(1)} cm NAP`;
+            },
+            labelColor(ctx2){
+              const ms=allTimesMs[ctx2.dataIndex];
+              if(ctx2.datasetIndex===0) return {borderColor:'transparent',backgroundColor:ms<=nowMs?'#43B02A':'rgba(126,184,247,0.9)'};
+              return {borderColor:'transparent',backgroundColor:'#f0a500'};
+            },
+          },
+        },
+      },
+      scales:{
+        x:{
+          grid:{color:'rgba(255,255,255,0.04)'},
+          ticks:{color:'#66696c',font:{family:'Maven Pro',size:11},maxTicksLimit:8,maxRotation:30},
+          border:{color:'rgba(255,255,255,0.08)'},
+          title:{display:true,text:'Datum/tijd in Venlo (incl. vertraging t.o.v. Sint Pieter)',color:'#66696c',font:{family:'Maven Pro',size:11},padding:{top:6}},
+        },
+        y:{
+          grid:{color:'rgba(255,255,255,0.05)'},
+          ticks:{color:'#66696c',font:{family:'Maven Pro',size:11},callback:v=>v.toFixed(0)},
+          border:{display:false},
+          title:{display:true,text:'Verwachte waterhoogte Venlo (cm t.o.v. NAP)',color:'#66696c',font:{family:'Maven Pro',size:11},padding:{bottom:6}},
+        },
+      },
+    },
+  });
+
+  // Table
+  const te=document.createElement('div'); te.className='fade-in'; te.style.animationDelay='.1s';
+  te.innerHTML=`<div class="slbl">Alle meetpunten</div>
+  <div class="tcard"><div class="tscroll"><table>
+    <thead><tr><th>Datum &amp; Tijd</th><th>Q Sint Pieter (m³/s)</th><th>H Venlo (cm NAP)</th><th>Regime</th><th>Type</th></tr></thead>
+    <tbody id="tb"></tbody>
+  </table></div></div>`;
+  main.appendChild(te);
+
+  const tb=te.querySelector('#tb');
+  rows.forEach(r=>{
+    const c=RC[r.regime],tr=document.createElement('tr');
+    if(r.isForecast) tr.className='fr';
+    tr.innerHTML=`<td class="tdd">${fmt(r.datetime)}</td><td>${r.Q.toFixed(1)}</td><td class="tdh">${r.H_cmNAP.toFixed(1)}</td>
+    <td><span class="rbadge" style="background:${c}22;color:${c};border:1px solid ${c}44">${r.regime}</span></td>
+    <td>${r.isForecast?'<span class="tf">▸ voorspelling</span>':'<span class="tm">gemeten</span>'}</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+// ═══════════════════════════════════════
+// SW + INSTALL
+// ═══════════════════════════════════════
+if('serviceWorker'in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+let dp=null;
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault(); dp=e;
+  if(!localStorage.getItem('idism')) document.getElementById('ibanner').style.display='flex';
+});
+async function installPWA(){if(!dp)return;dp.prompt();await dp.userChoice;dp=null;document.getElementById('ibanner').style.display='none';}
+function dismissInstall(){localStorage.setItem('idism','1');document.getElementById('ibanner').style.display='none';}
+</script>
+</body>
+</html>
