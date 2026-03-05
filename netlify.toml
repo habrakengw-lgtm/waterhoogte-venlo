@@ -1,0 +1,17 @@
+[build]
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/rws-data"
+  to   = "/.netlify/functions/rws-data"
+  status = 200
+
+[[redirects]]
+  from = "/api/rws-history"
+  to   = "/.netlify/functions/rws-history"
+  status = 200
+
+[[redirects]]
+  from = "/api/rws-current"
+  to   = "/.netlify/functions/rws-current"
+  status = 200
